@@ -1,0 +1,76 @@
+import numpy as np
+from matplotlib import pyplot as plt
+from sys import exit
+from IPython import embed
+
+def lassoLoss(Q,b,x,lamb):
+    return 0.5*np.dot(x,np.dot(Q,x)) - np.dot(b,x) + lamb * np.sum(np.abs(x))
+
+def softThreshold(x,lamb):
+    return np.sign(x) * (np.abs(x) - lamb).clip(0)
+
+def deltaX(Q,b,x):
+    return b - np.dot(Q, x)
+
+def generateGeneralizedGradient(Q,b,lamb,j):
+    def G(x,t):
+        newx = np.copy(x)
+        newx[j] = softThreshold(x[j] + t*deltaX(Q,b,x), t*lamb)
+        return (x-newx)/t
+    return G
+
+def g(Q,b,x):
+    return np.dot(x,np.dot(Q,x)) - np.dot(b,x)
+
+def backtracking(Q,b,x,lamb,tinit,beta,j):
+    t = tinit
+    G = generateGeneralizedGradient(Q[:,j],b[j],lamb,j)
+    while True:
+        G_val = G(x,t)
+        lhs = g(Q,b,x-t*G_val)
+        rhs = g(Q,b,x) + t * np.dot(deltaX(Q,b,x),  G_val) + t/2 * np.dot(G_val,G_val)
+        if lhs <= rhs:
+            break
+        else:
+            t = t * beta
+    return t
+
+def proximalCoordinateDescent(Q,b,x,lamb,tinit,beta,thr,method,maxiterations=200):
+    p = Q.shape[0]
+    tmp = np.copy(x)
+    loss = [lassoLoss(Q,b,tmp,lamb)]
+    while True:
+        for j in range(p):
+            if method == 1:
+                t = backtracking(Q,b,tmp,lamb,tinit,beta,j)
+            if method == 2:
+                t = 1/Q[j,j]
+            if method == 3:
+                t = tinit
+            tmp[j] = softThreshold(tmp[j] + t*deltaX(Q[:,j],b[j],tmp), t*lamb)
+        loss.append(lassoLoss(Q,b,tmp,lamb))
+        if np.abs(loss[-1] - loss[-2]) <= thr or len(loss) == maxiterations:
+            break
+    return tmp, loss
+
+def main():
+    #initiliaze parameter
+    plt.rcParams.update({'font.size':36})
+    p = 100
+    S = np.random.rand(p,p)
+    Q = np.dot(S.T, S)  + np.eye(p)
+    b = np.random.rand(p)
+    x = np.zeros(p)
+    tol = 1e-6
+    lamb = 0.1
+    out = proximalCoordinateDescent(Q,b,x,lamb,0.01,0.8,tol,2)
+    out_prox = proximalCoordinateDescent(Q,b,x,lamb,0.01,0.8,tol,3)
+    out_prox_back = proximalCoordinateDescent(Q,b,x,lamb,1,0.8,tol,1)
+    plt.plot(range(len(out[1])),np.array(out[1]),label="Coordinate Descent")
+    plt.plot(range(len(out_prox[1])),np.array(out_prox[1]),label="Proximal Coordinate Descent")
+    plt.plot(range(len(out_prox_back[1])),np.array(out_prox_back[1]),label="Proximal Coordinate Descent w/Backtracking")
+    plt.legend()
+    plt.show()
+    embed()
+
+main()

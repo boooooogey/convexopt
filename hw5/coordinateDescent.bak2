@@ -1,0 +1,96 @@
+import numpy as np
+from matplotlib import pyplot as plt
+from sys import exit
+from IPython import embed
+
+def lassoLoss(Q,b,x,lamb):
+    return 0.5*np.dot(x,np.dot(Q,x)) - np.dot(b,x) + lamb * np.sum(np.abs(x))
+
+def softThreshold(x,lamb):
+    return np.sign(x) * (np.abs(x) - lamb).clip(0)
+
+def gradient(Q,b,x):
+    return np.dot(Q, x) - b
+
+def generateGeneralizedGradient(Q,b,lamb,j):
+    def G(x,t):
+        newx = np.copy(x)
+        newx[j] = softThreshold(x[j] - t*gradient(Q,b,x), t*lamb)
+        return (x-newx)/t
+    return G
+
+def g(Q,b,x):
+    return 0.5 * np.dot(x,np.dot(Q,x)) - np.dot(b,x)
+
+def backtracking(Q,b,x,lamb,tinit,beta,j):
+    t = tinit
+    G = generateGeneralizedGradient(Q[:,j],b[j],lamb,j)
+    step = 0
+    while True:
+        G_val = G(x,t)
+        step = step + 1
+        lhs = g(Q,b,x-t*G_val)
+        rhs = g(Q,b,x) - t * np.dot(gradient(Q,b,x),  G_val) + t/2 * np.dot(G_val,G_val)
+        if lhs <= rhs:
+            break
+        else:
+            t = t * beta
+    return t, step
+
+def proximalCoordinateDescent(Q,b,x,lamb,tinit,beta,thr,method,maxiterations=200):
+    p = Q.shape[0]
+    tmp = np.copy(x)
+    loss = [lassoLoss(Q,b,tmp,lamb)]
+    step = 0
+    while True:
+        for j in range(p):
+            if method == 1:
+                t, s = backtracking(Q,b,tmp,lamb,tinit,beta,j)
+                step = step + s
+            if method == 2:
+                t = 1/Q[j,j]
+            if method == 3:
+                t = tinit
+            tmp[j] = softThreshold(tmp[j] - t*gradient(Q[:,j],b[j],tmp), t*lamb)
+            step = step + 1
+        loss.append(lassoLoss(Q,b,tmp,lamb))
+        if np.abs(loss[-1] - loss[-2]) <= thr or step <= maxiterations:
+            break
+    return tmp, loss
+
+def plotTrajectories(data,colors,names):
+    for i in range(data.shape[2]):
+        tmp = data[:,:,i]
+        ave = np.average(tmp,axis=0)
+        xrange = np.array([list(range(tmp.shape[1])),]*tmp.shape[0])
+        plt.plot(xrange,tmp,colors[i],alpha=0.3)
+        plt.plot(range(len(ave)),ave,colors[i],label=names[i])
+    plt.legend()
+    plt.xlabel("iterations")
+    plt.ylabel("Objective Function")
+    plt.show()
+        
+
+def main():
+    #initiliaze parameter
+    plt.rcParams.update({'font.size':36})
+    p = 100
+    tol = 1e-6
+    lamb = 0.1
+    number_of_experiments = 50
+    data = np.zeros((number_of_experiments,200,3))
+    for i in range(number_of_experiments):
+        S = np.random.rand(p,p)
+        Q = np.dot(S.T, S)  + np.eye(p)
+        b = np.random.rand(p)
+        x = np.zeros(p)
+        out = proximalCoordinateDescent(Q,b,x,lamb,0.01,0.8,tol,2)
+        data[i,:,0] = out[1]
+        out_prox = proximalCoordinateDescent(Q,b,x,lamb,0.01,0.8,tol,3)
+        data[i,:,1] = out_prox[1]
+        out_prox_back = proximalCoordinateDescent(Q,b,x,lamb,1,0.8,tol,1)
+        data[i,:,2] = out_prox_back[1]
+    plotTrajectories(data,['b','r','g'],["Exact","Fixed(t=0.01)","Backtracking"])
+    embed()
+
+main()

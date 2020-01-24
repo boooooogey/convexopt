@@ -1,0 +1,10 @@
+*.zip
+*.png
+*.pkl
+*.back*
+*.npy
+*.txt
+*.so
+*.o
+*.csv
+**/__pycache__
